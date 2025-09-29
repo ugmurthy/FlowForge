@@ -73,6 +73,26 @@ A self-hosted, node-based AI workflow automation platform inspired by n8n.io.
 
 ## 🧪 Testing Examples
 
+### Quick Test Scripts
+
+Run the README examples with pre-built curl scripts:
+
+```bash
+# Test Example 1: Basic HTTP workflow
+./scripts/test-example1.sh
+
+# Test Example 2: AI pipeline workflow  
+./scripts/test-example2.sh
+
+# Run both examples
+./scripts/test-all-examples.sh
+```
+
+**Requirements**: 
+- FlowForge server running on localhost:3001
+- Optional: `jq` for formatted JSON output
+- Optional: Environment variables for AI/Slack integration
+
 ### Example 1: Basic HTTP → Log Workflow
 ```json
 {

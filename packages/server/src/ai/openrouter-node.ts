@@ -10,6 +10,14 @@ export class OpenRouterNodeExecutor implements NodeExecutor {
     const maxTokens = config.maxTokens || 1000;
     const temperature = config.temperature || 0.7;
 
+    // Debug logging (remove in production)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('OpenRouter AI Node - Model:', model);
+      console.log('OpenRouter AI Node - API Key available:', !!apiKey);
+      console.log('OpenRouter AI Node - Original Prompt:', prompt);
+      console.log('OpenRouter AI Node - Context Data:', JSON.stringify(context.data, null, 2));
+    }
+    
     if (!apiKey) {
       throw new Error('OpenRouter API key is required');
     }
@@ -27,8 +35,19 @@ export class OpenRouterNodeExecutor implements NodeExecutor {
       const varName = variable.slice(2, -1); // Remove ${ and }
       const value = this.getNestedValue(context.data, varName) || '';
       processedPrompt = processedPrompt.replace(variable, String(value));
+      
+      // Debug variable replacement
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`Variable replacement: ${variable} -> "${value}"`);
+      }
     }
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('OpenRouter AI Node - Model:', model);
+      console.log('OpenRouter AI Node - API Key available:', !!apiKey);
+      console.log('OpenRouter AI Node - Context Data:', JSON.stringify(context.data, null, 2));
+      console.log('OpenRouter AI Node - Processed Prompt:', processedPrompt);
+    }
     try {
       const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
@@ -48,7 +67,7 @@ export class OpenRouterNodeExecutor implements NodeExecutor {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
-            'HTTP-Referer': 'https://github.com/your-repo/flowforge',
+            'HTTP-Referer': 'https://github.com/ugmurthy/FlowForge',
             'X-Title': 'FlowForge'
           }
         }

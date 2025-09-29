@@ -1,9 +1,13 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { connectDatabase, disconnectDatabase } from './database/client.js';
 import { workflowService } from './services/workflowService.js';
 import { workflowExecutor } from './core/executor.js';
 import { credentialService } from './services/credentialService.js';
+
+// Load environment variables from .env file
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

@@ -5,6 +5,13 @@ import { slackNodeExecutor } from '../integrations/slack-node.js';
 import { emailNodeExecutor } from '../integrations/email-node.js';
 import { sheetsNodeExecutor } from '../integrations/sheets-node.js';
 
+// Utility function for nested property access
+function getNestedValue(obj: any, path: string): any {
+  return path.split('.').reduce((current, key) => {
+    return current && current[key] !== undefined ? current[key] : undefined;
+  }, obj);
+}
+
 export class WorkflowExecutor {
   private nodeExecutors = new Map<string, NodeExecutor>();
 
@@ -59,8 +66,8 @@ export class WorkflowExecutor {
 
       const result = await executor.execute(context, node.data);
       
-      // Store result in context
-      context.data[node.id] = result;
+      // Store result in context (safely serialize to avoid circular references)
+      context.data[node.id] = this.safeSerialize(result);
       
       this.addLog(context, node.id, 'info', 'Node executed successfully', result);
 
@@ -102,8 +109,27 @@ export class WorkflowExecutor {
       timestamp: new Date().toISOString(),
       level,
       message,
-      data
+      data: data ? this.safeSerialize(data) : undefined
     });
+  }
+
+  private safeSerialize(obj: any): any {
+    const seen = new WeakSet();
+    return JSON.parse(JSON.stringify(obj, (key, value) => {
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) {
+          return '[Circular Reference]';
+        }
+        seen.add(value);
+      }
+      return value;
+    }));
+  }
+
+  private getNestedValue(obj: any, path: string): any {
+    return path.split('.').reduce((current, key) => {
+      return current && current[key] !== undefined ? current[key] : undefined;
+    }, obj);
   }
 
   private registerBuiltInExecutors() {
@@ -113,7 +139,8 @@ export class WorkflowExecutor {
         return {
           triggered: true,
           timestamp: new Date().toISOString(),
-          data: context.data
+          triggerType: nodeData.config.triggerType || 'manual',
+          inputData: Object.keys(context.data).length > 0 ? { ...context.data } : {}
         };
       }
     });
@@ -125,12 +152,37 @@ export class WorkflowExecutor {
         
         switch (actionType) {
           case 'log':
-            console.log('Action executed:', nodeData.config.message || 'No message');
-            return { action: 'logged', message: nodeData.config.message };
+            const logMessage = nodeData.config.message || 'No message';
+            // Replace variables in log message with context data
+            let processedLogMessage = logMessage;
+            const variables = logMessage.match(/\${([^}]+)}/g) || [];
+            for (const variable of variables) {
+              const varName = variable.slice(2, -1);
+              const value = getNestedValue(context.data, varName) || '';
+              processedLogMessage = processedLogMessage.replace(variable, String(value));
+            }
+            console.log('Action executed:', processedLogMessage);
+            return { action: 'logged', message: processedLogMessage, originalMessage: logMessage };
           
           case 'transform':
             const input = nodeData.inputs || context.data;
             return { transformed: true, result: input };
+          
+          case 'http':
+            // Delegate to HTTP node executor
+            return await httpNodeExecutor.execute(context, nodeData);
+          
+          case 'slack':
+            // Delegate to Slack node executor  
+            return await slackNodeExecutor.execute(context, nodeData);
+          
+          case 'email':
+            // Delegate to Email node executor
+            return await emailNodeExecutor.execute(context, nodeData);
+          
+          case 'sheets':
+            // Delegate to Sheets node executor
+            return await sheetsNodeExecutor.execute(context, nodeData);
           
           default:
             return { action: actionType, executed: true };
