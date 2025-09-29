@@ -9,6 +9,7 @@ import {
   addEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { Save, Loader2 } from 'lucide-react';
 
 import TriggerNode from './nodes/TriggerNode';
 import ActionNode from './nodes/ActionNode';
@@ -18,6 +19,10 @@ import AiNode from './nodes/AiNode';
 import SlackNode from './nodes/SlackNode';
 import EmailNode from './nodes/EmailNode';
 import SheetsNode from './nodes/SheetsNode';
+
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 const nodeTypes = {
   trigger: TriggerNode,
@@ -116,109 +121,147 @@ export default function WorkflowCanvas() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <div>Loading workflows...</div>
+      <div className="flex items-center justify-center h-screen">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Loading workflows...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh' }}>
+    <div className="w-screen h-screen">
       {/* Workflow Selector */}
-      <div style={{
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        zIndex: 1000,
-        background: 'white',
-        padding: '10px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-        minWidth: '250px'
-      }}>
-        <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>
-          Current Workflow: {currentWorkflow?.name || 'None'}
-        </h3>
-        
-        {workflows.length > 0 && (
-          <div style={{ marginBottom: '10px' }}>
-            <select 
+      <Card className="absolute top-2.5 right-2.5 z-50 min-w-[280px]">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">
+            Current Workflow: {currentWorkflow?.name || 'None'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {workflows.length > 0 && (
+            <Select 
               value={currentWorkflow?.id || ''} 
-              onChange={(e) => {
-                const selected = workflows.find(w => w.id === e.target.value);
+              onValueChange={(value) => {
+                const selected = workflows.find(w => w.id === value);
                 if (selected) loadWorkflow(selected);
               }}
-              style={{ width: '100%', padding: '5px', fontSize: '12px' }}
             >
-              <option value="">Select a workflow...</option>
-              {workflows.map(workflow => (
-                <option key={workflow.id} value={workflow.id}>
-                  {workflow.name} ({workflow.nodes.length} nodes)
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        
-        {currentWorkflow && (
-          <div>
-            <button 
-              onClick={saveWorkflow} 
-              style={{...buttonStyle, background: '#4CAF50', color: 'white', marginBottom: '5px'}}
-            >
-              💾 Save Workflow
-            </button>
-            <div style={{ fontSize: '11px', color: '#666', marginBottom: '10px' }}>
-              ID: {currentWorkflow.id.slice(0, 8)}...
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a workflow..." />
+              </SelectTrigger>
+              <SelectContent>
+                {workflows.map(workflow => (
+                  <SelectItem key={workflow.id} value={workflow.id}>
+                    {workflow.name} ({workflow.nodes.length} nodes)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          
+          {currentWorkflow && (
+            <div className="space-y-2">
+              <Button 
+                onClick={saveWorkflow} 
+                className="w-full"
+                size="sm"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Save Workflow
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                ID: {currentWorkflow.id.slice(0, 8)}...
+              </div>
             </div>
-          </div>
-        )}
-        
-        {workflows.length === 0 && (
-          <div style={{ fontSize: '12px', color: '#666' }}>
-            No workflows found. Create one using the test scripts!
-          </div>
-        )}
-      </div>
+          )}
+          
+          {workflows.length === 0 && (
+            <div className="text-xs text-muted-foreground">
+              No workflows found. Create one using the test scripts!
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Node Palette */}
-      <div style={{
-        position: 'absolute',
-        top: 10,
-        left: 10,
-        zIndex: 1000,
-        background: 'white',
-        padding: '10px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-      }}>
-        <h3 style={{ margin: '0 0 10px 0', fontSize: '14px' }}>Add Nodes</h3>
-        <button onClick={() => addNode('trigger')} style={buttonStyle}>
-          Trigger
-        </button>
-        <button onClick={() => addNode('action')} style={buttonStyle}>
-          Action
-        </button>
-        <button onClick={() => addNode('condition')} style={buttonStyle}>
-          Condition
-        </button>
-        <hr style={{ margin: '10px 0', border: '1px solid #eee' }} />
-        <button onClick={() => addNode('http')} style={buttonStyle}>
-          HTTP
-        </button>
-        <button onClick={() => addNode('ai')} style={buttonStyle}>
-          AI
-        </button>
-        <button onClick={() => addNode('slack')} style={buttonStyle}>
-          Slack
-        </button>
-        <button onClick={() => addNode('email')} style={buttonStyle}>
-          Email
-        </button>
-        <button onClick={() => addNode('sheets')} style={buttonStyle}>
-          Sheets
-        </button>
-      </div>
+      <Card className="absolute top-2.5 left-2.5 z-50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Add Nodes</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="grid gap-1">
+            <Button 
+              onClick={() => addNode('trigger')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              Trigger
+            </Button>
+            <Button 
+              onClick={() => addNode('action')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              Action
+            </Button>
+            <Button 
+              onClick={() => addNode('condition')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              Condition
+            </Button>
+          </div>
+          <hr className="my-2" />
+          <div className="grid gap-1">
+            <Button 
+              onClick={() => addNode('http')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              HTTP
+            </Button>
+            <Button 
+              onClick={() => addNode('ai')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              AI
+            </Button>
+            <Button 
+              onClick={() => addNode('slack')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              Slack
+            </Button>
+            <Button 
+              onClick={() => addNode('email')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              Email
+            </Button>
+            <Button 
+              onClick={() => addNode('sheets')} 
+              variant="outline" 
+              size="sm" 
+              className="justify-start"
+            >
+              Sheets
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <ReactFlow
         nodes={nodes}
@@ -237,14 +280,4 @@ export default function WorkflowCanvas() {
   );
 }
 
-const buttonStyle = {
-  display: 'block',
-  width: '100%',
-  margin: '5px 0',
-  padding: '8px 12px',
-  border: '1px solid #ddd',
-  borderRadius: '4px',
-  background: 'white',
-  cursor: 'pointer',
-  fontSize: '12px'
-};
+

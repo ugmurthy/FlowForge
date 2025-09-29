@@ -3,24 +3,17 @@ import { Handle, Position } from '@xyflow/react';
 
 export default function TriggerNode({ data }) {
   return (
-    <div style={{
-      padding: '10px',
-      borderRadius: '8px',
-      background: '#e3f2fd',
-      border: '2px solid #2196f3',
-      minWidth: '150px',
-      textAlign: 'center'
-    }}>
-      <div style={{ fontWeight: 'bold', color: '#1976d2', fontSize: '12px' }}>
+    <div className="p-3 rounded-lg bg-blue-50 border-2 border-blue-500 min-w-[150px] text-center">
+      <div className="font-bold text-blue-700 text-xs uppercase tracking-wide">
         TRIGGER
       </div>
-      <div style={{ marginTop: '5px', fontSize: '14px' }}>
+      <div className="mt-1 text-sm text-gray-800">
         {data.label}
       </div>
       <Handle
         type="source"
         position={Position.Right}
-        style={{ background: '#2196f3' }}
+        className="!bg-blue-500"
       />
     </div>
   );

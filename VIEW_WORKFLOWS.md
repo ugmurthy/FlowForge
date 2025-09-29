@@ -15,19 +15,31 @@
 ## What You'll See
 
 ### Workflow Selector (Top Right)
+- **Modern Card UI**: Clean card-based interface with professional styling
 - **Current Workflow**: Shows the name of the currently loaded workflow
-- **Dropdown**: Select from available workflows in the database
-- **Save Button**: Save changes to the current workflow
+- **Dropdown**: Elegant select dropdown to switch between workflows
+- **Save Button**: Modern button with save icon and visual feedback
 - **Workflow ID**: Shows shortened workflow ID for reference
 
 ### Node Palette (Top Left)  
-- **Add Nodes**: Click buttons to add new nodes to the canvas
+- **Card Interface**: Organized node palette in a clean card layout
+- **Add Nodes**: Modern outline buttons to add nodes to canvas
+- **Node Categories**: Core nodes (Trigger, Action, Condition) and Integration nodes
 - **Available Types**: Trigger, Action, Condition, HTTP, AI, Slack, Email, Sheets
 
 ### Canvas
-- **Visual Workflow**: See your workflows as connected node graphs
+- **Visual Workflow**: Clean, professional workflow representation
+- **Modern Node Design**: Color-coded nodes with Tailwind CSS styling:
+  - 🔵 **Trigger**: Blue theme for workflow entry points
+  - 🟢 **Action**: Green theme for general actions
+  - 🟠 **Condition**: Orange theme for decision logic
+  - 🟣 **AI**: Purple theme for AI/ML nodes
+  - 🔵 **HTTP**: Indigo theme for HTTP requests
+  - 🟡 **Slack**: Teal theme for Slack integration
+  - 🔴 **Email**: Rose theme for email actions
+  - 🟢 **Sheets**: Emerald theme for Google Sheets
 - **Interactive**: Drag nodes around, create connections
-- **Node Types**: Different colors for different node types
+- **Professional UI**: Consistent styling with shadcn/ui components
 
 ## Existing Workflows
 
