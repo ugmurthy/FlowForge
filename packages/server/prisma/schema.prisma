@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./flowforge.db"
+}
+
+model Workflow {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  nodes       String   // JSON string of workflow nodes
+  edges       String   // JSON string of workflow edges
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  isActive    Boolean  @default(true) @map("is_active")
+  
+  executions  Execution[]
+  
+  @@map("workflows")
+}
+
+model Execution {
+  id          String    @id @default(cuid())
+  workflowId  String    @map("workflow_id")
+  status      String    @default("running")
+  inputData   String?   @map("input_data") // JSON string
+  logs        String?   // JSON string of execution logs
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  
+  workflow    Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  @@map("executions")
+}
+
+model Credential {
+  id            String   @id @default(cuid())
+  name          String
+  type          String
+  encryptedData String   @map("encrypted_data")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  
+  @@map("credentials")
+}

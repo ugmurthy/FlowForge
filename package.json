@@ -1,0 +1,20 @@
+{
+  "name": "flowforge",
+  "version": "0.1.0",
+  "description": "Self-hosted, node-based AI workflow automation platform",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:client": "pnpm --filter client test",
+    "test:server": "pnpm --filter server test",
+    "test:watch": "pnpm -r test:watch",
+    "dev": "pnpm -r dev"
+  },
+  "workspaces": [
+    "packages/client",
+    "packages/server"
+  ],
+  "devDependencies": {
+    "typescript": "^5.2.2"
+  }
+}
