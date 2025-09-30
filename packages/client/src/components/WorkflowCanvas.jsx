@@ -78,11 +78,11 @@ export default function WorkflowCanvas() {
     setEdges(workflow.edges || []);
   }, [setNodes, setEdges]);
 
-  const addNode = useCallback((type) => {
+  const addNode = useCallback((type, position = null) => {
     const newNode = {
       id: `${Date.now()}`, // Use timestamp for unique ID
       type,
-      position: {
+      position: position || {
         x: Math.random() * 400,
         y: Math.random() * 400,
       },
@@ -90,6 +90,34 @@ export default function WorkflowCanvas() {
     };
     setNodes((nds) => nds.concat(newNode));
   }, [setNodes]);
+
+  const onDragStart = useCallback((event, nodeType) => {
+    event.dataTransfer.setData('application/reactflow', nodeType);
+    event.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      const type = event.dataTransfer.getData('application/reactflow');
+      if (!type) return;
+
+      const reactFlowBounds = event.target.getBoundingClientRect();
+      const position = {
+        x: event.clientX - reactFlowBounds.left,
+        y: event.clientY - reactFlowBounds.top,
+      };
+
+      addNode(type, position);
+    },
+    [addNode]
+  );
 
   const saveWorkflow = useCallback(async () => {
     if (!currentWorkflow) return;
@@ -194,25 +222,31 @@ export default function WorkflowCanvas() {
           <div className="grid gap-1">
             <Button 
               onClick={() => addNode('trigger')} 
+              onDragStart={(e) => onDragStart(e, 'trigger')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               Trigger
             </Button>
             <Button 
               onClick={() => addNode('action')} 
+              onDragStart={(e) => onDragStart(e, 'action')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               Action
             </Button>
             <Button 
               onClick={() => addNode('condition')} 
+              onDragStart={(e) => onDragStart(e, 'condition')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               Condition
             </Button>
@@ -221,41 +255,51 @@ export default function WorkflowCanvas() {
           <div className="grid gap-1">
             <Button 
               onClick={() => addNode('http')} 
+              onDragStart={(e) => onDragStart(e, 'http')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               HTTP
             </Button>
             <Button 
               onClick={() => addNode('ai')} 
+              onDragStart={(e) => onDragStart(e, 'ai')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               AI
             </Button>
             <Button 
               onClick={() => addNode('slack')} 
+              onDragStart={(e) => onDragStart(e, 'slack')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               Slack
             </Button>
             <Button 
               onClick={() => addNode('email')} 
+              onDragStart={(e) => onDragStart(e, 'email')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               Email
             </Button>
             <Button 
               onClick={() => addNode('sheets')} 
+              onDragStart={(e) => onDragStart(e, 'sheets')}
+              draggable
               variant="outline" 
               size="sm" 
-              className="justify-start"
+              className="justify-start cursor-grab active:cursor-grabbing"
             >
               Sheets
             </Button>
@@ -269,6 +313,8 @@ export default function WorkflowCanvas() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onDrop={onDrop}
+        onDragOver={onDragOver}
         nodeTypes={nodeTypes}
         fitView
       >

@@ -1,0 +1,8 @@
+
+
+**Recent Changes Summary:**
+
+1. **Initial Setup** (3f37bd8): Created monorepo with React+Vite client, Express+Prisma server, workflow executor engine, and drag-and-drop canvas
+2. **Data Flow Fixes** (911dbdb): Fixed circular references, added variable replacement (${node.property}), implemented dotenv support, created test scripts for workflow validation
+3. **Workflow Viewer** (5c6b8a0): Added workflow selector dropdown, API integration for loading/saving workflows, start-dev.sh script, and visual workflow management
+4. **UI Styling** (e07c42b): Integrated Tailwind CSS and Radix UI components (button, card, select), redesigned all node components with modern styling
