@@ -66,6 +66,16 @@ app.post('/api/workflows', async (req, res) => {
       nodes: nodes || [],
       edges: edges || []
     });
+    
+    // Validate that all nodes have the correct workflowId after creation
+    const invalidNodes = (nodes || []).filter((node: any) => 
+      node.data?.workflowId && node.data.workflowId !== workflow.id
+    );
+    
+    if (invalidNodes.length > 0) {
+      console.warn(`Warning: Created workflow ${workflow.id} has ${invalidNodes.length} nodes with mismatched workflowId`);
+    }
+    
     res.status(201).json({ workflow });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create workflow' });
@@ -75,7 +85,26 @@ app.post('/api/workflows', async (req, res) => {
 app.put('/api/workflows/:id', async (req, res) => {
   try {
     const { name, description, nodes, edges, isActive } = req.body;
-    const workflow = await workflowService.updateWorkflow(req.params.id, {
+    const workflowId = req.params.id;
+    
+    // Validate that all nodes have the correct workflowId
+    const invalidNodes = (nodes || []).filter((node: any) => 
+      node.data?.workflowId && node.data.workflowId !== workflowId
+    );
+    
+    if (invalidNodes.length > 0) {
+      return res.status(400).json({ 
+        error: 'Workflow validation failed',
+        message: `${invalidNodes.length} node(s) have mismatched workflowId. Expected: ${workflowId}`,
+        invalidNodes: invalidNodes.map((n: any) => ({ 
+          id: n.id, 
+          type: n.type, 
+          workflowId: n.data?.workflowId 
+        }))
+      });
+    }
+    
+    const workflow = await workflowService.updateWorkflow(workflowId, {
       name,
       description,
       nodes,

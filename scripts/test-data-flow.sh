@@ -43,7 +43,7 @@ WORKFLOW_JSON='{
         "label": "Process Data",
         "config": {
           "prompt": "Data received - Title: ${http-1.data.title}, Body: ${http-1.data.body}. Please confirm you received this data.",
-          "model": "meta-llama/llama-3.1-8b-instruct:free"
+          "model": "WRONG:x-ai/grok-4-fast:free"
         }
       }
     }
