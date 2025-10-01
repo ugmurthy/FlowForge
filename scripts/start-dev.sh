@@ -35,9 +35,10 @@ SERVER_PID=$!
 sleep 3
 
 # Start client in background  
-cd ../client && pnpm dev &
+cd packages/client && pnpm dev &
 CLIENT_PID=$!
-
+echo Server PID: $SERVER_PID
+echo Client PID: $CLIENT_PID
 # Function to cleanup background processes
 cleanup() {
     echo ""
@@ -51,3 +52,11 @@ trap cleanup INT
 
 # Wait for both processes
 wait $SERVER_PID $CLIENT_PID
+echo Server PID: $SERVER_PID
+echo Client PID: $CLIENT_PID
+# Kill by process name
+## pkill -f "pnpm dev"
+
+# Or kill by port
+## lsof -ti:3001 | xargs kill -9  # server
+## lsof -ti:3000 | xargs kill -9  # client

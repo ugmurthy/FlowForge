@@ -7,6 +7,23 @@ import { emailNodeExecutor } from '../integrations/email-node.js';
 import { sheetsNodeExecutor } from '../integrations/sheets-node.js';
 import { getNestedValue, replaceVariables } from '../utils/variable-utils.js';
 
+interface ExecutionOptions {
+  continueOnError?: boolean;
+  retryPolicy?: {
+    maxRetries: number;
+    backoffMs: number;
+  };
+  timeout?: number;
+}
+
+interface NodeMetrics {
+  startTime: number;
+  endTime: number;
+  duration: number;
+  retries: number;
+  status: 'success' | 'failed' | 'skipped';
+}
+
 export class WorkflowExecutor {
   private nodeExecutors = new Map<string, NodeExecutor>();
 
@@ -22,7 +39,7 @@ export class WorkflowExecutor {
     return Array.from(this.nodeExecutors.keys());
   }
 
-  async executeWorkflow(workflow: Workflow, inputData: Record<string, any> = {}): Promise<ExecutionContext> {
+  async executeWorkflow(workflow: Workflow, inputData: Record<string, any> = {}, options: ExecutionOptions = {}): Promise<ExecutionContext> {
     const executionId = `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const context: ExecutionContext = {
@@ -32,20 +49,17 @@ export class WorkflowExecutor {
       logs: []
     };
 
+    const metrics = new Map<string, NodeMetrics>();
+
     try {
-      // Find trigger nodes to start execution
-      const triggerNodes = workflow.nodes.filter(node => node.type === 'trigger');
-      
-      if (triggerNodes.length === 0) {
-        throw new Error('No trigger nodes found in workflow');
-      }
+      // Phase 1 & 2: Build dependency graph and detect cycles
+      const { inDegree, adjacency } = this.buildDependencyGraph(workflow);
+      this.detectCycles(workflow, inDegree);
 
-      // Execute from each trigger node
-      for (const triggerNode of triggerNodes) {
-        await this.executeFromNode(workflow, triggerNode, context);
-      }
+      // Phase 3: Topological sort with Phase 4: Parallel execution
+      await this.executeTopologically(workflow, context, inDegree, adjacency, metrics, options);
 
-      this.addLog(context, 'system', 'info', 'Workflow execution completed');
+      this.addLog(context, 'system', 'info', 'Workflow execution completed', { metrics: this.serializeMetrics(metrics) });
       return context;
 
     } catch (error) {
@@ -54,44 +68,261 @@ export class WorkflowExecutor {
     }
   }
 
-  private async executeFromNode(workflow: Workflow, node: WorkflowNode, context: ExecutionContext): Promise<any> {
-    this.addLog(context, node.id, 'info', `Executing node: ${node.data.label}`);
+  private buildDependencyGraph(workflow: Workflow): { inDegree: Map<string, number>, adjacency: Map<string, string[]> } {
+    const inDegree = new Map<string, number>();
+    const adjacency = new Map<string, string[]>();
 
-    try {
-      const executor = this.nodeExecutors.get(node.type);
-      if (!executor) {
-        throw new Error(`No executor found for node type: ${node.type}`);
+    // Initialize all nodes with in-degree 0
+    for (const node of workflow.nodes) {
+      inDegree.set(node.id, 0);
+      adjacency.set(node.id, []);
+    }
+
+    // Build adjacency list and calculate in-degrees
+    for (const edge of workflow.edges) {
+      const currentTargets = adjacency.get(edge.source) || [];
+      currentTargets.push(edge.target);
+      adjacency.set(edge.source, currentTargets);
+      
+      const currentInDegree = inDegree.get(edge.target) || 0;
+      inDegree.set(edge.target, currentInDegree + 1);
+    }
+
+    return { inDegree, adjacency };
+  }
+
+  private detectCycles(workflow: Workflow, inDegree: Map<string, number>): void {
+    const workingInDegree = new Map(inDegree);
+    const queue: string[] = [];
+
+    // Find all nodes with in-degree 0
+    for (const [nodeId, degree] of workingInDegree.entries()) {
+      if (degree === 0) {
+        queue.push(nodeId);
       }
+    }
 
-      const result = await executor.execute(context, node.data);
-      
-      // Store result in context (safely serialize to avoid circular references)
-      context.data[node.id] = this.safeSerialize(result);
-      
-      this.addLog(context, node.id, 'info', 'Node executed successfully', result);
+    const processed: string[] = [];
 
-      // Find and execute connected nodes
-      const outgoingEdges = workflow.edges.filter(edge => edge.source === node.id);
-      
+    while (queue.length > 0) {
+      const nodeId = queue.shift()!;
+      processed.push(nodeId);
+
+      const node = workflow.nodes.find(n => n.id === nodeId);
+      if (!node) continue;
+
+      const outgoingEdges = workflow.edges.filter(e => e.source === nodeId);
       for (const edge of outgoingEdges) {
-        const targetNode = workflow.nodes.find(n => n.id === edge.target);
-        if (targetNode) {
-          // For condition nodes, check if we should continue
-          if (node.type === 'condition' && !this.shouldContinueExecution(result)) {
-            this.addLog(context, node.id, 'info', 'Condition not met, skipping downstream nodes');
+        const currentDegree = workingInDegree.get(edge.target) || 0;
+        workingInDegree.set(edge.target, currentDegree - 1);
+        
+        if (workingInDegree.get(edge.target) === 0) {
+          queue.push(edge.target);
+        }
+      }
+    }
+
+    // If not all nodes were processed, there's a cycle
+    if (processed.length !== workflow.nodes.length) {
+      const unprocessed = workflow.nodes
+        .filter(n => !processed.includes(n.id))
+        .map(n => n.id)
+        .join(', ');
+      throw new Error(`Cycle detected in workflow. Nodes involved: ${unprocessed}`);
+    }
+  }
+
+  private async executeTopologically(
+    workflow: Workflow,
+    context: ExecutionContext,
+    inDegree: Map<string, number>,
+    adjacency: Map<string, string[]>,
+    metrics: Map<string, NodeMetrics>,
+    options: ExecutionOptions
+  ): Promise<void> {
+    const workingInDegree = new Map(inDegree);
+    const executedNodes = new Set<string>();
+    const skippedNodes = new Set<string>();
+    
+    // Find all nodes with in-degree 0 (starting nodes)
+    let currentLevel: string[] = [];
+    for (const [nodeId, degree] of workingInDegree.entries()) {
+      if (degree === 0) {
+        currentLevel.push(nodeId);
+      }
+    }
+
+    while (currentLevel.length > 0) {
+      // Phase 4: Execute all nodes at current level IN PARALLEL
+      await Promise.all(currentLevel.map(async (nodeId) => {
+        // Skip if already executed or skipped
+        if (executedNodes.has(nodeId) || skippedNodes.has(nodeId)) {
+          return;
+        }
+
+        const node = workflow.nodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        // Phase 5: Execute node with retry logic, timeout, and metrics
+        const nodeResult = await this.executeNodeWithRetry(node, context, options, metrics);
+
+        executedNodes.add(nodeId);
+
+        // Phase 5: Conditional branch pruning
+        if (node.type === 'condition' && !this.shouldContinueExecution(nodeResult)) {
+          this.addLog(context, node.id, 'info', 'Condition not met, pruning downstream nodes');
+          const downstreamNodes = this.getDownstreamNodes(nodeId, adjacency, workflow);
+          for (const downstreamId of downstreamNodes) {
+            skippedNodes.add(downstreamId);
+            metrics.set(downstreamId, {
+              startTime: Date.now(),
+              endTime: Date.now(),
+              duration: 0,
+              retries: 0,
+              status: 'skipped'
+            });
+          }
+        }
+      }));
+
+      // Find next level of nodes to execute
+      const nextLevel: string[] = [];
+      for (const nodeId of currentLevel) {
+        const targets = adjacency.get(nodeId) || [];
+        for (const targetId of targets) {
+          if (executedNodes.has(targetId) || skippedNodes.has(targetId)) {
             continue;
           }
-          
-          await this.executeFromNode(workflow, targetNode, context);
+
+          const currentDegree = workingInDegree.get(targetId) || 0;
+          workingInDegree.set(targetId, currentDegree - 1);
+
+          // If all dependencies are satisfied, add to next level
+          if (workingInDegree.get(targetId) === 0 && !nextLevel.includes(targetId)) {
+            nextLevel.push(targetId);
+          }
         }
       }
 
-      return result;
-
-    } catch (error) {
-      this.addLog(context, node.id, 'error', `Node execution failed: ${error instanceof Error ? error.message : String(error)}`);
-      throw error;
+      currentLevel = nextLevel;
     }
+  }
+
+  private async executeNodeWithRetry(
+    node: WorkflowNode,
+    context: ExecutionContext,
+    options: ExecutionOptions,
+    metrics: Map<string, NodeMetrics>
+  ): Promise<any> {
+    const maxRetries = options.retryPolicy?.maxRetries || 0;
+    const backoffMs = options.retryPolicy?.backoffMs || 1000;
+    const timeout = options.timeout || 30000; // 30s default timeout
+
+    const startTime = Date.now();
+    let lastError: Error | null = null;
+    let retries = 0;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        this.addLog(context, node.id, 'info', `Executing node: ${node.data.label}${attempt > 0 ? ` (retry ${attempt})` : ''}`);
+
+        const result = await Promise.race([
+          this.executeSingleNode(node, context),
+          this.createTimeout(timeout, node.id)
+        ]);
+
+        context.data[node.id] = this.safeSerialize(result);
+        this.addLog(context, node.id, 'info', 'Node executed successfully', result);
+
+        const endTime = Date.now();
+        metrics.set(node.id, {
+          startTime,
+          endTime,
+          duration: endTime - startTime,
+          retries: attempt,
+          status: 'success'
+        });
+
+        return result;
+
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        retries = attempt;
+
+        if (attempt < maxRetries) {
+          this.addLog(context, node.id, 'warn', `Node execution failed, retrying in ${backoffMs}ms: ${lastError.message}`);
+          await this.delay(backoffMs * (attempt + 1)); // Exponential backoff
+        }
+      }
+    }
+
+    // All retries exhausted
+    const endTime = Date.now();
+    const errorMessage = `Node execution failed after ${retries + 1} attempts: ${lastError?.message}`;
+
+    if (options.continueOnError) {
+      this.addLog(context, node.id, 'error', `${errorMessage} (continuing workflow)`);
+      metrics.set(node.id, {
+        startTime,
+        endTime,
+        duration: endTime - startTime,
+        retries,
+        status: 'failed'
+      });
+      context.data[node.id] = { error: lastError?.message, skipped: true };
+      return { error: lastError?.message, skipped: true };
+    }
+
+    this.addLog(context, node.id, 'error', errorMessage);
+    metrics.set(node.id, {
+      startTime,
+      endTime,
+      duration: endTime - startTime,
+      retries,
+      status: 'failed'
+    });
+    throw lastError;
+  }
+
+  private async executeSingleNode(node: WorkflowNode, context: ExecutionContext): Promise<any> {
+    const executor = this.nodeExecutors.get(node.type);
+    if (!executor) {
+      throw new Error(`No executor found for node type: ${node.type}`);
+    }
+
+    return await executor.execute(context, node.data);
+  }
+
+  private createTimeout(ms: number, nodeId: string): Promise<never> {
+    return new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Node ${nodeId} execution timeout after ${ms}ms`));
+      }, ms);
+    });
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  private getDownstreamNodes(nodeId: string, adjacency: Map<string, string[]>, workflow: Workflow): Set<string> {
+    const downstream = new Set<string>();
+    const queue = [nodeId];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const targets = adjacency.get(current) || [];
+      for (const target of targets) {
+        downstream.add(target);
+        queue.push(target);
+      }
+    }
+
+    return downstream;
   }
 
   private shouldContinueExecution(conditionResult: any): boolean {
@@ -100,6 +331,14 @@ export class WorkflowExecutor {
       return conditionResult.continue === true;
     }
     return Boolean(conditionResult);
+  }
+
+  private serializeMetrics(metrics: Map<string, NodeMetrics>): Record<string, NodeMetrics> {
+    const result: Record<string, NodeMetrics> = {};
+    for (const [nodeId, metric] of metrics.entries()) {
+      result[nodeId] = metric;
+    }
+    return result;
   }
 
   private addLog(context: ExecutionContext, nodeId: string, level: ExecutionLog['level'], message: string, data?: any) {
@@ -155,19 +394,15 @@ export class WorkflowExecutor {
             return { transformed: true, result: input };
           
           case 'http':
-            // Delegate to HTTP node executor
             return await httpNodeExecutor.execute(context, nodeData);
           
           case 'slack':
-            // Delegate to Slack node executor  
             return await slackNodeExecutor.execute(context, nodeData);
           
           case 'email':
-            // Delegate to Email node executor
             return await emailNodeExecutor.execute(context, nodeData);
           
           case 'sheets':
-            // Delegate to Sheets node executor
             return await sheetsNodeExecutor.execute(context, nodeData);
           
           default:
@@ -182,14 +417,11 @@ export class WorkflowExecutor {
         const condition = nodeData.config.condition || 'true';
         const conditionData = nodeData.inputs || context.data;
         
-        // Simple condition evaluation (can be enhanced later)
         let result = false;
         try {
-          // For MVP, support simple conditions like "data.value > 10"
           if (condition === 'true') result = true;
           else if (condition === 'false') result = false;
           else {
-            // Basic evaluation - in production, use a safe expression evaluator
             result = Boolean(conditionData);
           }
         } catch (error) {
