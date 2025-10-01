@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { NodeExecutor, ExecutionContext } from '../types/workflow.js';
+import { replaceVariables } from '../utils/variable-utils.js';
 
 export class SlackNodeExecutor implements NodeExecutor {
   async execute(context: ExecutionContext, nodeData: any): Promise<any> {
@@ -20,13 +21,7 @@ export class SlackNodeExecutor implements NodeExecutor {
     }
 
     // Replace variables in message with context data
-    let processedMessage = message;
-    const variables = message.match(/\${([^}]+)}/g) || [];
-    for (const variable of variables) {
-      const varName = variable.slice(2, -1);
-      const value = this.getNestedValue(context.data, varName) || '';
-      processedMessage = processedMessage.replace(variable, String(value));
-    }
+    const processedMessage = replaceVariables(message, context.data);
 
     try {
       if (webhookUrl) {
@@ -93,12 +88,6 @@ export class SlackNodeExecutor implements NodeExecutor {
       }
       throw new Error(`Slack request failed: ${error.message}`);
     }
-  }
-
-  private getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => {
-      return current && current[key] !== undefined ? current[key] : undefined;
-    }, obj);
   }
 }
 

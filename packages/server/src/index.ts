@@ -11,7 +11,7 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-
+console.log("PID ", process.pid)
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -23,6 +23,16 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'FlowForge API'
   });
+});
+
+// Node types endpoint
+app.get('/api/node-types', (req, res) => {
+  try {
+    const nodeTypes = workflowExecutor.getAvailableNodeTypes();
+    res.json({ nodeTypes });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch node types' });
+  }
 });
 
 // Workflow endpoints

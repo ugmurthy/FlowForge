@@ -16,6 +16,7 @@ import ActionNode from './nodes/ActionNode';
 import ConditionNode from './nodes/ConditionNode';
 import HttpNode from './nodes/HttpNode';
 import AiNode from './nodes/AiNode';
+import OllamaNode from './nodes/OllamaNode';
 import SlackNode from './nodes/SlackNode';
 import EmailNode from './nodes/EmailNode';
 import SheetsNode from './nodes/SheetsNode';
@@ -30,6 +31,7 @@ const nodeTypes = {
   condition: ConditionNode,
   http: HttpNode,
   ai: AiNode,
+  ollama: OllamaNode,
   slack: SlackNode,
   email: EmailNode,
   sheets: SheetsNode,
@@ -44,11 +46,30 @@ export default function WorkflowCanvas() {
   const [workflows, setWorkflows] = useState([]);
   const [currentWorkflow, setCurrentWorkflow] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [availableNodeTypes, setAvailableNodeTypes] = useState([]);
 
   const onConnect = useCallback(
     (params) => setEdges((eds) => addEdge(params, eds)),
     [setEdges],
   );
+
+  // Load available node types from API
+  useEffect(() => {
+    const fetchNodeTypes = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/node-types');
+        const data = await response.json();
+        console.log('Fetched node types:', data.nodeTypes);
+        setAvailableNodeTypes(data.nodeTypes || []);
+      } catch (error) {
+        console.error('Failed to fetch node types:', error);
+        // Fallback to default node types if API fails
+        setAvailableNodeTypes(['trigger', 'action', 'condition', 'http', 'ai', 'ollama', 'slack', 'email', 'sheets']);
+      }
+    };
+    
+    fetchNodeTypes();
+  }, []);
 
   // Load workflows from API
   useEffect(() => {
@@ -219,91 +240,27 @@ export default function WorkflowCanvas() {
           <CardTitle className="text-sm">Add Nodes</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <div className="grid gap-1">
-            <Button 
-              onClick={() => addNode('trigger')} 
-              onDragStart={(e) => onDragStart(e, 'trigger')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              Trigger
-            </Button>
-            <Button 
-              onClick={() => addNode('action')} 
-              onDragStart={(e) => onDragStart(e, 'action')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              Action
-            </Button>
-            <Button 
-              onClick={() => addNode('condition')} 
-              onDragStart={(e) => onDragStart(e, 'condition')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              Condition
-            </Button>
-          </div>
-          <hr className="my-2" />
-          <div className="grid gap-1">
-            <Button 
-              onClick={() => addNode('http')} 
-              onDragStart={(e) => onDragStart(e, 'http')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              HTTP
-            </Button>
-            <Button 
-              onClick={() => addNode('ai')} 
-              onDragStart={(e) => onDragStart(e, 'ai')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              AI
-            </Button>
-            <Button 
-              onClick={() => addNode('slack')} 
-              onDragStart={(e) => onDragStart(e, 'slack')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              Slack
-            </Button>
-            <Button 
-              onClick={() => addNode('email')} 
-              onDragStart={(e) => onDragStart(e, 'email')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              Email
-            </Button>
-            <Button 
-              onClick={() => addNode('sheets')} 
-              onDragStart={(e) => onDragStart(e, 'sheets')}
-              draggable
-              variant="outline" 
-              size="sm" 
-              className="justify-start cursor-grab active:cursor-grabbing"
-            >
-              Sheets
-            </Button>
-          </div>
+          {availableNodeTypes.length > 0 ? (
+            <div className="grid gap-1">
+              {availableNodeTypes.map((nodeType) => (
+                <Button
+                  key={nodeType}
+                  onClick={() => addNode(nodeType)}
+                  onDragStart={(e) => onDragStart(e, nodeType)}
+                  draggable
+                  variant="outline"
+                  size="sm"
+                  className="justify-start cursor-grab active:cursor-grabbing capitalize"
+                >
+                  {nodeType}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">
+              Loading node types...
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -320,7 +277,19 @@ export default function WorkflowCanvas() {
       >
         <Controls />
         <MiniMap />
-        <Background variant="dots" gap={12} size={1} />
+      
+        <Background
+        variant="lines"
+        gap={10}
+        color='#f1f1f1'
+        id='1'
+      />
+        <Background
+        variant='lines'
+        gap={100}
+        color='#ccc'
+        id='2'
+      />
       </ReactFlow>
     </div>
   );

@@ -1,16 +1,11 @@
 import { Workflow, WorkflowNode, ExecutionContext, ExecutionLog, NodeExecutor } from '../types/workflow.js';
 import { httpNodeExecutor } from '../integrations/http-node.js';
 import { openRouterNodeExecutor } from '../ai/openrouter-node.js';
+import { ollamaNodeExecutor } from '../ai/ollama-node.js';
 import { slackNodeExecutor } from '../integrations/slack-node.js';
 import { emailNodeExecutor } from '../integrations/email-node.js';
 import { sheetsNodeExecutor } from '../integrations/sheets-node.js';
-
-// Utility function for nested property access
-function getNestedValue(obj: any, path: string): any {
-  return path.split('.').reduce((current, key) => {
-    return current && current[key] !== undefined ? current[key] : undefined;
-  }, obj);
-}
+import { getNestedValue, replaceVariables } from '../utils/variable-utils.js';
 
 export class WorkflowExecutor {
   private nodeExecutors = new Map<string, NodeExecutor>();
@@ -21,6 +16,10 @@ export class WorkflowExecutor {
 
   registerExecutor(nodeType: string, executor: NodeExecutor) {
     this.nodeExecutors.set(nodeType, executor);
+  }
+
+  getAvailableNodeTypes(): string[] {
+    return Array.from(this.nodeExecutors.keys());
   }
 
   async executeWorkflow(workflow: Workflow, inputData: Record<string, any> = {}): Promise<ExecutionContext> {
@@ -126,12 +125,6 @@ export class WorkflowExecutor {
     }));
   }
 
-  private getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => {
-      return current && current[key] !== undefined ? current[key] : undefined;
-    }, obj);
-  }
-
   private registerBuiltInExecutors() {
     // Basic trigger executor
     this.registerExecutor('trigger', {
@@ -153,14 +146,7 @@ export class WorkflowExecutor {
         switch (actionType) {
           case 'log':
             const logMessage = nodeData.config.message || 'No message';
-            // Replace variables in log message with context data
-            let processedLogMessage = logMessage;
-            const variables = logMessage.match(/\${([^}]+)}/g) || [];
-            for (const variable of variables) {
-              const varName = variable.slice(2, -1);
-              const value = getNestedValue(context.data, varName) || '';
-              processedLogMessage = processedLogMessage.replace(variable, String(value));
-            }
+            const processedLogMessage = replaceVariables(logMessage, context.data);
             console.log('Action executed:', processedLogMessage);
             return { action: 'logged', message: processedLogMessage, originalMessage: logMessage };
           
@@ -221,6 +207,7 @@ export class WorkflowExecutor {
     // Register integration nodes
     this.registerExecutor('http', httpNodeExecutor);
     this.registerExecutor('ai', openRouterNodeExecutor);
+    this.registerExecutor('ollama', ollamaNodeExecutor);
     this.registerExecutor('slack', slackNodeExecutor);
     this.registerExecutor('email', emailNodeExecutor);
     this.registerExecutor('sheets', sheetsNodeExecutor);

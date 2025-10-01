@@ -1,23 +1,17 @@
 import axios from 'axios';
 import { NodeExecutor, ExecutionContext } from '../types/workflow.js';
+import { replaceVariables } from '../utils/variable-utils.js';
 
 export class OpenRouterNodeExecutor implements NodeExecutor {
   async execute(context: ExecutionContext, nodeData: any): Promise<any> {
     const config = nodeData.config || {};
     const apiKey = config.apiKey || process.env.OPENROUTER_API_KEY;
     const model = config.model || 'openai/gpt-3.5-turbo';
+    const systemPrompt = config.systemPrompt || 'You are a helpful assistant'
     const prompt = config.prompt || '';
     const maxTokens = config.maxTokens || 1000;
     const temperature = config.temperature || 0.7;
 
-    // Debug logging (remove in production)
-    if (process.env.NODE_ENV === 'development') {
-      console.log('OpenRouter AI Node - Model:', model);
-      console.log('OpenRouter AI Node - API Key available:', !!apiKey);
-      console.log('OpenRouter AI Node - Original Prompt:', prompt);
-      console.log('OpenRouter AI Node - Context Data:', JSON.stringify(context.data, null, 2));
-    }
-    
     if (!apiKey) {
       throw new Error('OpenRouter API key is required');
     }
@@ -27,20 +21,7 @@ export class OpenRouterNodeExecutor implements NodeExecutor {
     }
 
     // Replace variables in prompt with context data
-    let processedPrompt = prompt;
-    
-    // Simple variable replacement: ${variableName}
-    const variables = prompt.match(/\${([^}]+)}/g) || [];
-    for (const variable of variables) {
-      const varName = variable.slice(2, -1); // Remove ${ and }
-      const value = this.getNestedValue(context.data, varName) || '';
-      processedPrompt = processedPrompt.replace(variable, String(value));
-      
-      // Debug variable replacement
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`Variable replacement: ${variable} -> "${value}"`);
-      }
-    }
+    const processedPrompt = replaceVariables(prompt, context.data);
 
     if (process.env.NODE_ENV === 'development') {
       console.log('OpenRouter AI Node - Model:', model);
@@ -54,6 +35,9 @@ export class OpenRouterNodeExecutor implements NodeExecutor {
         {
           model,
           messages: [
+            { role:'system',
+              content:systemPrompt
+            },
             {
               role: 'user',
               content: processedPrompt
@@ -90,12 +74,6 @@ export class OpenRouterNodeExecutor implements NodeExecutor {
       }
       throw new Error(`OpenRouter request failed: ${error.message}`);
     }
-  }
-
-  private getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => {
-      return current && current[key] !== undefined ? current[key] : undefined;
-    }, obj);
   }
 }
 
